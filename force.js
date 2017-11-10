@@ -5,6 +5,7 @@ let timeout = 1;
 let loop = (success) => {
   scrape((courses) => {
     console.log("DONE");
+    require('fs').write("courses.json", JSON.stringify(courses), () => {});
   }, () => {
     console.log(`RETRYING AGAIN IN ${timeout} MILISECONDS`);
     setTimeout(() => {

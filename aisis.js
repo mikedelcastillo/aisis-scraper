@@ -182,8 +182,6 @@ let aisis = {
     let loadedDepartments = 0;
 
     let getNextDepartment = () => {
-      console.log(Number((loadedDepartments/totalDepartments) * 100).toFixed(2) + "%", currentDepartments.length + " left");
-
       if(currentDepartments.length){
         let currentDepartment = currentDepartments.shift();
         this.getCoursesFromDepartment(
@@ -205,6 +203,7 @@ let aisis = {
             getNextDepartment();
             loadedDepartments++;
 
+            console.log(Number((loadedDepartments/totalDepartments) * 100).toFixed(2) + "%");
             if(loadedDepartments == totalDepartments) success(currentCourses);
           },
           fail
