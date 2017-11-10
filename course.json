@@ -1,0 +1,26 @@
+{
+  "code": "XX NNN",
+  "section": "XX",
+  "units": 3,
+  "title": "Title here",
+  "time": "D-D-D HH:MM; D-D HH:MM; TBA",
+  "room": "XX NNN",
+  "instructor": "Name, Here",
+  "free": 40,
+  "language": "ENG",
+  "level": "G",
+  "remarks": "Comments here",
+  "dateUpdated": 1502087400000,
+  "department": {
+    "name": "NAME OF DEPARTMENT",
+    "code": "DEPT"
+  },
+  "year": {
+    "name": "2017 - 2018",
+    "code": "2017"
+  },
+  "semester": {
+    "name": "First Semster",
+    "code": "1"
+  }
+}

@@ -11,7 +11,7 @@ const REG_RESULTS = /Remarks.*?tr>([\S\s]*?)<\/tr><\/table>/gmi;
 const REG_ROWS = /<tr[\S\s]*?"text03">([\S\s]*?)<\/[\S\s]*?"text03">([\S\s]*?)<\/[\S\s]*?"text03">([\S\s]*?)<\/[\S\s]*?"text03">([\S\s]*?)<\/[\S\s]*?"text03">([\S\s]*?)<\/[\S\s]*?"text03">([\S\s]*?)<\/[\S\s]*?"text03">([\S\s]*?)<\/[\S\s]*?"text03">([\S\s]*?)<\/[\S\s]*?"text03">([\S\s]*?)<\/[\S\s]*?"text03">([\S\s]*?)<\/[\S\s]*?"text03">([\S\s]*?)<\/[\S\s]*?<\/tr>/gmi;
 
 let aisis = {
-
+  silent: false,
   request(deptCode, semCode, yearCode, success, fail){
     let blank = deptCode == null || semCode == null || yearCode == null;
 
@@ -26,11 +26,14 @@ let aisis = {
 
     request[method]({
       url: AISIS_URL,
-      formData: data
+      formData: data,
+      timeout: 10000 * 60
     }, (err, res, body) => {
       if(err){
+        //if(!this.silent) console.log("REQUEST: Failed request");
         fail(err, res);
       } else{
+        //if(!this.silent) console.log("REQUEST: Successful request");
         success(body);
       }
     });
@@ -40,7 +43,8 @@ let aisis = {
     this.request(null, null, null, body => {
       REG_YEARS.lastIndex = 0;
       let html = REG_YEARS.exec(body);
-      if(!html){ success([]); return; }
+
+      if(!html){ fail(); return; }
       html = html[0];
 
       let years = [];
@@ -48,8 +52,8 @@ let aisis = {
       REG_OPTIONS.lastIndex = 0;
       for(let match; match = REG_OPTIONS.exec(html);){
         years.push({
-          name: match[2],
-          code: match[1],
+          name: match[2].trim(),
+          code: match[1].trim(),
           default: !!match[0].match(/selected/gmi)
         });
       }
@@ -63,7 +67,7 @@ let aisis = {
     this.request(null, null, null, body => {
       REG_SEMESTERS.lastIndex = 0;
       let html = REG_SEMESTERS.exec(body);
-      if(!html){ success([]); return; }
+      if(!html){ fail(); return; }
       html = html[0];
 
       let semesters = [];
@@ -71,8 +75,8 @@ let aisis = {
       REG_OPTIONS.lastIndex = 0;
       for(let match; match = REG_OPTIONS.exec(html);){
         semesters.push({
-          name: match[2],
-          code: match[1],
+          name: match[2].trim(),
+          code: match[1].trim(),
           default: !!match[0].match(/selected/gmi)
         });
       }
@@ -86,7 +90,7 @@ let aisis = {
     this.request(null, null, null, body => {
       REG_DEPARTMENTS.lastIndex = 0;
       let html = REG_DEPARTMENTS.exec(body);
-      if(!html){ success([]); return; }
+      if(!html){ fail(); return; }
       html = html[0];
 
       let departments = [];
@@ -116,6 +120,29 @@ let aisis = {
 
   getCoursesFromDepartment(deptCode, semCode, yearCode, success, fail){
     this.request(deptCode, semCode, yearCode, body => {
+      REG_UPDATE.lastIndex = 0;
+      let updateMatch = REG_UPDATE.exec(body);
+      let dateUpdated = 0;
+
+      if(updateMatch){
+        let parsedTime = updateMatch[4].trim().split(":").map((string, i) => {
+          let n = Number(string);
+
+          if(i == 0){
+            if(updateMatch[5].trim() == "P.M."){
+              n += 12;
+            } else{
+              if(n == 12) n = 0;
+            }
+          }
+
+          return n < 10 ? "0" + n : n;
+        }).join(":");
+        let dateString = `${updateMatch[1].trim()} ${updateMatch[2].trim()}, ${updateMatch[3].trim()} ${parsedTime}:00`;
+        dateUpdated = new Date(dateString).getTime() / 1000;
+      }
+
+
       REG_RESULTS.lastIndex = 0;
       let html = REG_RESULTS.exec(body);
       if(!html){ success([]); return; }
@@ -126,17 +153,18 @@ let aisis = {
       REG_ROWS.lastIndex = 0;
       for(let match; match = REG_ROWS.exec(html);){
         courses.push({
-          code: match[1],
-          section: match[2],
-          units: Number(match[4]),
-          title: match[3],
-          time: match[5],
-          room: match[6],
-          instructor: match[7],
-          free: Number(match[8]),
-          language: match[9],
-          level: match[10],
-          remarks: match[11].replace("\r", "")
+          code: match[1].trim(),
+          section: match[2].trim(),
+          units: Number(match[4].trim()),
+          title: match[3].trim(),
+          time: match[5].trim(),
+          room: match[6].trim(),
+          instructor: match[7].trim(),
+          free: Number(match[8].trim()),
+          language: match[9].trim(),
+          level: match[10].trim(),
+          remarks: match[11].replace(/[\r\n\~]/gmi, "").trim(),
+          dateUpdated: dateUpdated
         });
       }
 
@@ -150,17 +178,19 @@ let aisis = {
     let currentDepartments = [];
     let currentCourses = [];
 
+    let totalDepartments = 1;
+    let loadedDepartments = 0;
+
     let getNextDepartment = () => {
-      if(!currentDepartments.length){
-        success(currentCourses);
-      } else{
+      console.log(Number((loadedDepartments/totalDepartments) * 100).toFixed(2) + "%", currentDepartments.length + " left");
+
+      if(currentDepartments.length){
         let currentDepartment = currentDepartments.shift();
         this.getCoursesFromDepartment(
           currentDepartment.code,
           currentSemester.code,
           currentYear.code,
           courses => {
-            console.log(currentDepartment);
             currentCourses = currentCourses.concat(
               courses
               .map(course => {
@@ -173,6 +203,9 @@ let aisis = {
             );
 
             getNextDepartment();
+            loadedDepartments++;
+
+            if(loadedDepartments == totalDepartments) success(currentCourses);
           },
           fail
         );
@@ -181,17 +214,18 @@ let aisis = {
 
     this.getDefaultYear(year => {
       currentYear = year;
-      console.log(currentYear);
+      console.log("Current Year: ", currentYear);
 
       this.getDefaultSemester(semester => {
         currentSemester = semester;
-        console.log(currentSemester);
+        console.log("Current Semester: ", currentSemester);
 
         this.getDepartments(departments => {
           currentDepartments = departments;
-          console.log(currentDepartments);
+          totalDepartments = departments.length;
+          console.log("Received current departments");
 
-          getNextDepartment();
+          for(let i = 0; i < 10; i++) getNextDepartment();
         }, fail);
       }, fail);
     }, fail);
